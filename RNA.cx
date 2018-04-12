@@ -1,0 +1,299 @@
+Incluir: @"Lista.cx";
+
+Classe: Sinapse
+{
+	Privado:
+		
+		Objeto: neuronio;
+		Real: peso;
+		
+	Publico:
+		
+		construtor(Objeto: neuronio, Real: peso)
+		{
+			este.neuronio = neuronio;
+			este.alterarPeso(peso);
+		}
+		
+		neuronio()
+		{
+			retornar: este.neuronio;
+		}
+		
+		peso()
+		{
+			retornar: este.peso;
+		}
+		
+		alterarPeso(Real: peso)
+		{
+			se(peso >= -1 && peso <= 1)
+			{
+				este.peso = peso;
+			}
+		}
+		
+		resultado()
+		{
+			retornar: este.neuronio.saida() * este.peso;
+		}
+}
+
+Classe: Neuronio
+{
+	Privado:
+		
+		Real: entrada;
+		Real: saida;
+		Objeto: sinapses;
+		Objeto: interface;
+		
+	Publico:
+		
+		construtor(Objeto: interface)
+		{
+			este.interface = interface;
+			este.sinapses = novo Lista();
+		}
+		
+		destrutor()
+		{
+			para(Inteiro: i; i < este.sinapses.tamanho(); i++)
+			{
+				este.sinapses.valor(i).destruir();
+			}
+			este.sinapses.destruir();
+		}
+		
+		entrada()
+		{
+			retornar: este.entrada;
+		}
+		
+		saida()
+		{
+			retornar: este.saida;
+		}
+		
+		sinapse(Inteiro: indice)
+		{
+			retornar: este.sinapses.valor(indice);
+		}
+		
+		quantidade_sinapses()
+		{
+			retornar: este.sinapses.tamanho();
+		}
+		
+		conectar(Objeto: neuronio, Real: peso)
+		{
+			este.sinapses.adicionar(novo Sinapse(neuronio, peso));
+		}
+		
+		desconectar(Inteiro: indice)
+		{
+			Objeto: sinapse = este.sinapses.valor(indice);
+			este.sinapses.remover(indice);
+			sinapse.destruir();
+		}
+		
+		processar()
+		{
+			este.entrada = 0;
+			
+			para(Inteiro: i; i < este.sinapses.tamanho(); i++)
+			{
+				este.entrada += este.sinapses.valor(i).resultado();
+			}
+			
+			este.saida = este.interface.ativar(este.entrada);
+		}
+}
+
+Classe: Entrada
+{
+	Privado:
+		
+		Real: valor;
+		
+	Publico:
+		
+		definir(Real: valor)
+		{
+			este.valor = valor;
+		}
+		
+		saida()
+		{
+			retornar: este.valor;
+		}
+}
+
+Classe: Saida
+{
+	Privado:
+		
+		Objeto: neuronio;
+		
+	Publico:
+		
+		conectar(Objeto: neuronio)
+		{
+			este.neuronio = neuronio;
+		}
+		
+		valor()
+		{
+			retornar: este.neuronio.saida();
+		}
+}
+
+Classe: Camada
+{
+	Herdar: Lista;
+	
+	destrutor()
+	{
+		para(Inteiro: i; i < este.tamanho(); i++)
+		{
+			este.valor(i).destruir();
+		}
+	}
+	
+	conectar(Objeto: camada)
+	{
+		para(Inteiro: i; i < este.tamanho(); i++)
+		{
+			para(Inteiro: j; j < camada.tamanho(); j++)
+			{
+				este.valor(i).conectar(camada.valor(j), 1);
+			}
+		}
+	}
+	
+	processar()
+	{
+		para(Inteiro: i; i < este.tamanho(); i++)
+		{
+			este.valor(i).processar();
+		}
+	}
+}
+
+Classe: Rede
+{
+	Herdar: Lista;
+	
+	Privado:
+		
+		Objeto[]: entradas;
+		Objeto[]: saidas;
+		
+		criarEntradas()
+		{
+			Objeto: camada = este.valor(0);
+			
+			este.entradas = novo Objeto[camada.tamanho()];
+			
+			para(Inteiro: i; i < este.entradas.tamanho; i++)
+			{
+				este.entradas[i] = novo Entrada();
+				camada.valor(i).conectar(este.entradas[i], 1);
+			}
+		}
+		
+		criarSaidas()
+		{
+			Objeto: camada = este.valor(este.tamanho() - 1);
+			
+			este.saidas = novo Objeto[camada.tamanho()];
+			
+			para(Inteiro: i; i < este.saidas.tamanho; i++)
+			{
+				este.saidas[i] = novo Saida();
+				este.saidas[i].conectar(camada.valor(i));
+			}
+		}
+		
+	Publico:
+		
+		destrutor()
+		{
+			se(este.entradas != Vetor.nulo())
+			{
+				para(Inteiro: i; i < este.entradas.tamanho; i++)
+				{
+					este.entradas[i].destruir();
+				}
+				este.entradas.liberar();
+			}
+			se(este.entradas != Vetor.nulo())
+			{
+				para(Inteiro: i; i < este.saidas.tamanho; i++)
+				{
+					este.saidas[i].destruir();
+				}
+				este.saidas.liberar();
+			}
+		}
+		
+		entradas()
+		{
+			se(este.entradas == Vetor.nulo())
+			{
+				este.criarEntradas();
+			}
+			retornar: este.entradas;
+		}
+		
+		saidas()
+		{
+			se(este.saidas == Vetor.nulo())
+			{
+				este.criarSaidas();
+			}
+			retornar: este.saidas;
+		}
+		
+		excluirEntradas()
+		{
+			se(este.entradas != Vetor.nulo())
+			{
+				para(Inteiro: i; i < este.entradas.tamanho; i++)
+				{
+					este.entradas[i].destruir();
+				}
+				este.entradas.liberar();
+				este.entradas = Vetor.nulo();
+			}
+		}
+		
+		excluirSaidas()
+		{
+			se(este.saidas != Vetor.nulo())
+			{
+				para(Inteiro: i; i < este.saidas.tamanho; i++)
+				{
+					este.saidas[i].destruir();
+				}
+				este.saidas.liberar();
+				este.saidas = Vetor.nulo();
+			}
+		}
+		
+		processar()
+		{
+			para(Inteiro: i; i < este.tamanho(); i++)
+			{
+				este.valor(i).processar();
+			}
+		}
+		
+		conectarCamadas()
+		{
+			para(Inteiro: i = 1; i < este.tamanho(); i++)
+			{
+				este.valor(i).conectar(este.valor(i - 1));
+			}
+		}
+}
