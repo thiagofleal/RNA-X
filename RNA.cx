@@ -1,5 +1,20 @@
 Incluir: @"Lista.cx";
 
+Classe: ErroRede
+{
+	Herdar: Erro;
+	
+	construtor(Texto: msg)
+	{
+		base(msg);
+	}
+	
+	mensagem()
+	{
+		retornar: "Erro na Rede Neural\n" << base.mensagem();
+	}
+}
+
 Classe: Sinapse
 {
 	Privado:
@@ -12,30 +27,37 @@ Classe: Sinapse
 		construtor(Objeto: neuronio, Real: peso)
 		{
 			este.neuronio = neuronio;
-			este.alterarPeso(peso);
-		}
-		
-		neuronio()
-		{
-			retornar: este.neuronio;
-		}
-		
-		peso()
-		{
-			retornar: este.peso;
-		}
-		
-		alterarPeso(Real: peso)
-		{
+			
 			se(peso >= -1 && peso <= 1)
 			{
 				este.peso = peso;
 			}
 		}
 		
+		neuronio()
+		{retornar: este.neuronio;}
+		
+		peso()
+		{retornar: este.peso;}
+		
+		aprender(Real: variacao)
+		{
+			este.peso += variacao;
+		}
+		
 		resultado()
 		{
 			retornar: este.neuronio.saida() * este.peso;
+		}
+		
+		persistir(Arquivo: arquivo)
+		{
+			arquivo.escreverLinha("\t\t\tSinapse " << este.peso);
+		}
+		
+		recuperar(Arquivo: arquivo)
+		{
+			este.peso = arquivo.real();
 		}
 }
 
@@ -45,6 +67,7 @@ Classe: Neuronio
 		
 		Real: entrada;
 		Real: saida;
+		Real: erro;
 		Objeto: sinapses;
 		Objeto: interface;
 		
@@ -66,23 +89,28 @@ Classe: Neuronio
 		}
 		
 		entrada()
-		{
-			retornar: este.entrada;
-		}
+		{retornar: este.entrada;}
 		
 		saida()
-		{
-			retornar: este.saida;
-		}
+		{retornar: este.saida;}
 		
 		sinapse(Inteiro: indice)
-		{
-			retornar: este.sinapses.valor(indice);
-		}
+		{retornar: este.sinapses.valor(indice);}
 		
 		quantidade_sinapses()
+		{retornar: este.sinapses.tamanho();}
+		
+		interface()
+		{retornar: este.interface;}
+		
+		erro({Real}Real[]: erro)
 		{
-			retornar: este.sinapses.tamanho();
+			se(erro.tamanho != 0)
+			{
+				este.erro = erro[0];
+				erro.liberar();
+			}
+			retornar: este.erro;
 		}
 		
 		conectar(Objeto: neuronio, Real: peso)
@@ -108,6 +136,35 @@ Classe: Neuronio
 			
 			este.saida = este.interface.ativar(este.entrada);
 		}
+		
+		persistir(Arquivo: arquivo)
+		{
+			arquivo.escreverLinha("\t\tNeurônio");
+			
+			para(Inteiro: i; i < este.sinapses.tamanho(); i++)
+			{
+				este.sinapses.valor(i).persistir(arquivo);
+			}
+			
+			arquivo.escreverLinha("\t\t/Neurônio");
+		}
+		
+		recuperar(Arquivo: arquivo)
+		{
+			Inteiro: i;
+			Texto: linha;
+			
+			enquanto((linha = arquivo.palavra()) == "Sinapse")
+			{
+				este.sinapses.valor(i).recuperar(arquivo);
+				i++;
+			}
+			
+			se(linha != "/Neurônio")
+			{
+				disparar: novo ErroRede("Espera-se \"/Neurônio\" no lugar de \"" << linha << "\"");
+			}
+		}
 }
 
 Classe: Entrada
@@ -119,33 +176,30 @@ Classe: Entrada
 	Publico:
 		
 		definir(Real: valor)
-		{
-			este.valor = valor;
-		}
+		{este.valor = valor;}
 		
 		saida()
-		{
-			retornar: este.valor;
-		}
+		{retornar: este.valor;}
 }
 
 Classe: Saida
 {
-	Privado:
-		
-		Objeto: neuronio;
-		
-	Publico:
-		
-		conectar(Objeto: neuronio)
-		{
-			este.neuronio = neuronio;
-		}
-		
-		valor()
-		{
-			retornar: este.neuronio.saida();
-		}
+	Herdar: Neuronio;
+	
+	construtor(Objeto: interface)
+	{
+		base(interface);
+	}
+	
+	exemploUnicaCamada(Real: esperado)
+	{
+		este.erro(esperado - este.saida());
+	}
+	
+	exemploMultiplasCamadas(Real: esperado)
+	{
+		este.erro(este.interface().derivada(este.entrada()) * (esperado - este.saida()));
+	}
 }
 
 Classe: Camada
@@ -166,7 +220,7 @@ Classe: Camada
 		{
 			para(Inteiro: j; j < camada.tamanho(); j++)
 			{
-				este.valor(i).conectar(camada.valor(j), 1);
+				este.valor(i).conectar(camada.valor(j), Numero.aleatorio(-0.5, 0.5, 3));
 			}
 		}
 	}
@@ -178,6 +232,35 @@ Classe: Camada
 			este.valor(i).processar();
 		}
 	}
+	
+	persistir(Arquivo: arquivo)
+	{
+		arquivo.escreverLinha("\tCamada");
+		
+		para(Inteiro: i; i < este.tamanho(); i++)
+		{
+			este.valor(i).persistir(arquivo);
+		}
+		
+		arquivo.escreverLinha("\t/Camada");
+	}
+	
+	recuperar(Arquivo: arquivo)
+	{
+		Inteiro: i;
+		Texto: linha;
+		
+		enquanto((linha = arquivo.linha()) == "Neurônio")
+		{
+			este.valor(i).recuperar(arquivo);
+			i++;
+		}
+		
+		se(linha != "/Camada")
+		{
+			disparar: novo ErroRede("Espera-se \"/Neurônio\" no lugar de \"" << linha << "\"");
+		}
+	}
 }
 
 Classe: Rede
@@ -186,106 +269,116 @@ Classe: Rede
 	
 	Privado:
 		
-		Objeto[]: entradas;
-		Objeto[]: saidas;
-		
-		criarEntradas()
+		erroUnicaCamada(Real[]: esperado)
 		{
-			Objeto: camada = este.valor(0);
+			Objeto: saida = este.valor(1);
 			
-			este.entradas = novo Objeto[camada.tamanho()];
-			
-			para(Inteiro: i; i < este.entradas.tamanho; i++)
+			para(Inteiro: i; i < saida.tamanho(); i++)
 			{
-				este.entradas[i] = novo Entrada();
-				camada.valor(i).conectar(este.entradas[i], 1);
+				saida.valor(i).exemploUnicaCamada(esperado[i]);
 			}
 		}
 		
-		criarSaidas()
+		erroMultiplasCamadas(Real[]: esperado)
 		{
-			Objeto: camada = este.valor(este.tamanho() - 1);
+			Objeto: saida = este.valor(este.tamanho() - 1);
 			
-			este.saidas = novo Objeto[camada.tamanho()];
-			
-			para(Inteiro: i; i < este.saidas.tamanho; i++)
+			para(Inteiro: i; i < saida.tamanho(); i++)
 			{
-				este.saidas[i] = novo Saida();
-				este.saidas[i].conectar(camada.valor(i));
+				saida.valor(i).exemploMultiplasCamadas(esperado[i]);
+			}
+			
+			para(Inteiro: c = este.tamanho() - 2; c >= 1; c--)
+			{
+				para(Inteiro: i; i < este.valor(c).tamanho(); i++)
+				{
+					Objeto: neuronio = este.valor(c).valor(i);
+					Real: soma_erro;
+					
+					para(Inteiro: j; j < este.valor(c + 1).tamanho(); j++)
+					{
+						Objeto: neuronio = este.valor(c + 1).valor(j);
+						soma_erro += neuronio.sinapse(i).peso() * neuronio.erro();
+					}
+					
+					neuronio.erro(neuronio.interface().derivada(neuronio.entrada()) * soma_erro);
+				}
 			}
 		}
 		
 	Publico:
 		
-		destrutor()
-		{
-			se(este.entradas != Vetor.nulo())
-			{
-				para(Inteiro: i; i < este.entradas.tamanho; i++)
-				{
-					este.entradas[i].destruir();
-				}
-				este.entradas.liberar();
-			}
-			se(este.entradas != Vetor.nulo())
-			{
-				para(Inteiro: i; i < este.saidas.tamanho; i++)
-				{
-					este.saidas[i].destruir();
-				}
-				este.saidas.liberar();
-			}
-		}
-		
-		entradas()
-		{
-			se(este.entradas == Vetor.nulo())
-			{
-				este.criarEntradas();
-			}
-			retornar: este.entradas;
-		}
-		
-		saidas()
-		{
-			se(este.saidas == Vetor.nulo())
-			{
-				este.criarSaidas();
-			}
-			retornar: este.saidas;
-		}
-		
-		excluirEntradas()
-		{
-			se(este.entradas != Vetor.nulo())
-			{
-				para(Inteiro: i; i < este.entradas.tamanho; i++)
-				{
-					este.entradas[i].destruir();
-				}
-				este.entradas.liberar();
-				este.entradas = Vetor.nulo();
-			}
-		}
-		
-		excluirSaidas()
-		{
-			se(este.saidas != Vetor.nulo())
-			{
-				para(Inteiro: i; i < este.saidas.tamanho; i++)
-				{
-					este.saidas[i].destruir();
-				}
-				este.saidas.liberar();
-				este.saidas = Vetor.nulo();
-			}
-		}
-		
 		processar()
 		{
-			para(Inteiro: i; i < este.tamanho(); i++)
+			para(Inteiro: i = 1; i < este.tamanho(); i++)
 			{
 				este.valor(i).processar();
+			}
+		}
+		
+		aprenderExemplo(Real[]: entrada, Real[]: saida, Real: aprendizagem)
+		{
+			Objeto: camadaEntrada = este.valor(0);
+			Objeto: camadaSaida = este.valor(este.tamanho() - 1);
+			
+			se(entrada.tamanho != camadaEntrada.tamanho())
+			{
+				disparar: novo ErroRede("Vetor incompatível com a entrada da rede");
+			}
+			
+			se(saida.tamanho != camadaSaida.tamanho())
+			{
+				disparar: novo ErroRede("Vetor incompatível com a saída da rede");
+			}
+			
+			para(Inteiro: i; i < camadaEntrada.tamanho(); i++)
+			{
+				camadaEntrada.valor(i).definir(entrada[i]);
+			}
+			
+			este.processar();
+			
+			se(este.tamanho() == 2)
+			{
+				este.erroUnicaCamada(saida);
+				
+				para(Inteiro: i; i < camadaSaida.tamanho(); i++)
+				{
+					Objeto: neuronio = camadaSaida.valor(i);
+					
+					para(Inteiro: j; j < neuronio.quantidade_sinapses(); j++)
+					{
+						Objeto: sinapse = neuronio.sinapse(j);
+						sinapse.aprender(
+							neuronio.interface().derivada(neuronio.entrada()) *
+							neuronio.erro() *
+							sinapse.neuronio().saida() *
+							aprendizagem
+						);
+					}
+				}
+			}
+			senao
+			{
+				este.erroMultiplasCamadas(saida);
+				
+				para(Inteiro: c = 1; c < este.tamanho(); c++)
+				{
+					para(Inteiro: j; j < este.valor(c).tamanho(); j++)
+					{
+						Objeto: neuronio = este.valor(c).valor(j);
+						
+						para(Inteiro: i; i < neuronio.quantidade_sinapses(); i++)
+						{
+							Objeto: sinapse = neuronio.sinapse(i);
+							sinapse.aprender(
+								neuronio.erro() *
+								sinapse.neuronio().saida() *
+								aprendizagem
+							);
+						}
+					}
+				}
 			}
 		}
 		
@@ -295,5 +388,46 @@ Classe: Rede
 			{
 				este.valor(i).conectar(este.valor(i - 1));
 			}
+		}
+		
+		persistir(Texto: nome_arquivo)
+		{
+			Arquivo: arquivo = Abrir(nome_arquivo, "e");
+			
+			arquivo.escreverLinha("Rede");
+			
+			para(Inteiro: i = 1; i < este.tamanho(); i++)
+			{
+				este.valor(i).persistir(arquivo);
+			}
+			
+			arquivo.escreverLinha("/Rede");
+			arquivo.fechar();
+		}
+		
+		recuperar(Texto: nome_arquivo)
+		{
+			Arquivo: arquivo = Abrir(nome_arquivo, "l");
+			Inteiro: i;
+			
+			Texto: linha = arquivo.linha();
+			
+			se(linha != "Rede")
+			{
+				disparar: novo ErroRede("O arquivo não contém uma rede neural");
+			}
+			
+			enquanto((linha = arquivo.linha()) == "Camada")
+			{
+				i++;
+				este.valor(i).recuperar(arquivo);
+			}
+			
+			se(linha != "/Rede")
+			{
+				disparar: novo ErroRede("Espera-se \"/Rede\" ao fim do arquivo");
+			}
+			
+			arquivo.fechar();
 		}
 }
